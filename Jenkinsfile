@@ -9,15 +9,19 @@ pipeline {
         }
         stage('Pruebas') {
             steps {
-                sh 'docker compose up -d'
-                sh 'sleep 5'
-                sh 'docker exec securedev-estudiante-app-1 python -c "import urllib.request; data=urllib.request.urlopen(\"http://127.0.0.1:8000/health\").read().decode(); print(data); assert \"ok\" in data"'
+                sh '''
+                docker compose up -d
+                sleep 5
+                docker exec securedev-estudiante-app-1 python3 -c 'import urllib.request; data = urllib.request.urlopen("http://127.0.0.1:8000/health").read().decode(); print(data); assert "ok" in data'
+                '''
             }
         }
         stage('Despliegue') {
             steps {
-                sh 'docker compose up -d --build'
-                sh 'docker compose ps'
+                sh '''
+                docker compose up -d --build
+                docker compose ps
+                '''
             }
         }
     }
