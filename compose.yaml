@@ -5,7 +5,7 @@ services:
     build: .
     environment:
       DATABASE_PATH: /data/securedev.db
-      SECRET_KEY: clave-insegura-solo-laboratorio
+      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
     volumes:
       - app_data:/data
     ports:

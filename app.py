@@ -1,10 +1,7 @@
-"""Aplicación deliberadamente vulnerable para la evaluación OCY1102 EV3.
-
-Solo debe ejecutarse en el laboratorio local. El alumnado debe revisar y corregir
-los defectos; estos comentarios no enumeran las respuestas de la evaluación.
-"""
+"""Aplicación web de tickets para el laboratorio SecureDev (OCY1102)."""
 
 import os
+import secrets
 import sqlite3
 import time
 from pathlib import Path
@@ -32,7 +29,12 @@ LOGIN_FAILURES = Counter(
 
 def create_app(database_path=None):
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "clave-insegura-solo-laboratorio")
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key or secret_key == "clave-insegura-solo-laboratorio":
+        secret_key = secrets.token_hex(32)
+    app.config["SECRET_KEY"] = secret_key
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["DATABASE_PATH"] = str(
         database_path or os.getenv("DATABASE_PATH", str(Path(__file__).with_name("securedev.db")))
     )
@@ -146,6 +148,8 @@ def create_app(database_path=None):
         ).fetchone()
         if item is None:
             abort(404)
+        if item["owner_id"] != current_user():
+            abort(403)
         comments = db().execute(
             "SELECT body FROM comments WHERE ticket_id = ? ORDER BY id", (ticket_id,)
         ).fetchall()
@@ -155,8 +159,13 @@ def create_app(database_path=None):
     def add_comment(ticket_id):
         if not current_user():
             return redirect(url_for("login"))
-        if db().execute("SELECT id FROM tickets WHERE id = ?", (ticket_id,)).fetchone() is None:
+        item = db().execute(
+            "SELECT id, owner_id FROM tickets WHERE id = ?", (ticket_id,)
+        ).fetchone()
+        if item is None:
             abort(404)
+        if item["owner_id"] != current_user():
+            abort(403)
         body = request.form.get("body", "")
         db().execute(
             "INSERT INTO comments (ticket_id, author_id, body) VALUES (?, ?, ?)",
@@ -170,8 +179,10 @@ def create_app(database_path=None):
         if not current_user():
             return redirect(url_for("login"))
         query = request.args.get("q", "")
-        sql = f"SELECT id, title FROM tickets WHERE title LIKE '%{query}%' ORDER BY id"
-        tickets = db().execute(sql).fetchall()
+        tickets = db().execute(
+            "SELECT id, title FROM tickets WHERE owner_id = ? AND title LIKE ? ORDER BY id",
+            (current_user(), f"%{query}%"),
+        ).fetchall()
         return render_template("search.html", tickets=tickets, query=query)
 
     @app.get("/health")
